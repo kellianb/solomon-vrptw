@@ -1,23 +1,25 @@
 mod file_parser;
 mod location;
 mod route;
+mod vrp;
 
 use file_parser::parse_solomon_vrp_file;
-use route::Route;
+use vrp::Vrp;
 
 fn main() {
     let (warehouse, customers) = parse_solomon_vrp_file(&String::from("sample.txt"));
     println!("N° of customers : {}", &customers.len());
 
-    let rt = Route {
+    let mut vrp = Vrp {
         customers,
         warehouse,
+        n_vehicles: 25,
+        vehicle_capacity: 200,
+        routes: Vec::with_capacity(0),
     };
 
-    let (min_len, shortest) = rt.brute_force();
 
-    println!("Shortest route lenght : {}", min_len);
-    println!("Shortest route order : {:?}", shortest);
+    vrp.nearest_neighbour_heuristic();
 
-    shortest.plot();
+    // vrp.plot();
 }

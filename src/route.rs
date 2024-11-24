@@ -1,60 +1,60 @@
 use crate::location::Location;
+use itertools::Itertools;
 use plotters::prelude::*;
 
-use std::collections::HashMap;
-
 #[derive(Debug, Clone)]
-pub struct Route {
-    pub customers: Vec<Location>,
-    pub warehouse: Location,
+pub struct Route<'a> {
+    pub customers: Vec<&'a Location>,
+    pub warehouse: &'a Location,
 }
 
-impl Route {
-    pub fn len(&self) -> f64 {
+impl<'a> Route<'a> {
+    pub fn total_distance(&self) -> f32 {
         (0..self.customers.len() - 2)
-            .map(|i| self.customers[i].distance_to(&self.customers[i + 1]))
-            .sum::<f64>()
+            .map(|i| self.customers[i].distance_to(self.customers[i + 1]))
+            .sum::<f32>()
             // Distance from warehouse to first customer
-            + self.warehouse.distance_to(&self.customers[0])
+            + self.warehouse.distance_to(self.customers[0])
             // Distance from last customer to warehouse
-            + self.customers[self.customers.len() -1].distance_to(&self.warehouse)
-    }
-    fn permute(&self) -> Vec<Route> {
-        let mut result: Vec<Vec<Location>> = Vec::new();
-        permute(&mut self.customers.clone(), 0, &mut result);
-
-        result
-            .into_iter()
-            .map(|x| Route {
-                customers: x,
-                warehouse: self.warehouse.clone(),
-            })
-            .collect()
+            + self.customers[self.customers.len() -1].distance_to(self.warehouse)
     }
 
-    pub fn brute_force(&self) -> (u32, Route) {
-        let route_lenghts: HashMap<u32, Route> = self
-            .permute()
-            .into_iter()
-            .map(|x| ((x.len() * 100f64) as u32, x))
-            .collect();
+    pub fn total_cost(&self) -> f32 {
+        let mut cost = self.warehouse.cost_to(self.customers[0], 0f32);
+        for i in 0..self.customers.len() - 2 {
+            cost += self.customers[i].cost_to(self.customers[i + 1], cost)
+        }
+        cost + self.customers[self.customers.len() - 1].cost_to(self.warehouse, cost)
+    }
 
-        let min_len = route_lenghts
-            .keys()
-            .min()
-            .expect("Failed to calculate min len")
-            .clone();
+    // Does not take into account any time window or capacity restrictions
+    pub fn brute_force(&self) -> (f32, Route) {
+        let mut shortest = self.clone();
+        let mut min_len = shortest.total_distance();
 
-        let shortest = route_lenghts
-            .get(&min_len)
-            .expect("Failed to get min len")
-            .clone();
+        for i in self
+            .customers
+            .iter()
+            .copied()
+            .permutations(self.customers.len())
+        {
+            let route = Route {
+                customers: i.clone(),
+                warehouse: self.warehouse,
+            };
+            let len = route.total_distance();
+
+            if len < min_len {
+                min_len = len;
+                shortest = route;
+            }
+        }
 
         (min_len, shortest)
     }
 
-    pub fn plot(&self) {
-        let root = SVGBackend::new("vrp_route.svg", (640, 480)).into_drawing_area();
+    pub fn plot(&self, title: &str) {
+        let root = SVGBackend::new(title, (640, 480)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         let mut chart = ChartBuilder::on(&root)
@@ -110,17 +110,5 @@ impl Route {
 
         root.present().unwrap();
         println!("SVG file saved as 'vrp_route.svg'");
-    }
-}
-
-fn permute<T: Clone>(vec: &mut Vec<T>, start: usize, result: &mut Vec<Vec<T>>) {
-    if start == vec.len() {
-        result.push(vec.clone());
-    } else {
-        for i in start..vec.len() {
-            vec.swap(start, i);
-            permute(vec, start + 1, result);
-            vec.swap(start, i); // backtrack
-        }
     }
 }
