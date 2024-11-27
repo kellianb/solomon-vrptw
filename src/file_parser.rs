@@ -14,13 +14,13 @@ pub fn parse_solomon_vrp_file(path: &String) -> (Location, Vec<Location>) {
     // Create a buffered reader to read the file line by line
     let reader = BufReader::new(file);
 
-    let locations = reader
-        .lines()
-        .skip(9)
+    // Get lines with data, drop invalid lines
+    let locations = reader.lines().skip(9).filter_map(|x| x.ok());
+    let locations = locations
+        .filter(|l| !l.trim().is_empty()) // Remove empty
+        // lines
         .map(|line| {
             // Unwrap each line to handle any I/O errors
-            let line = line.expect("Error on a line");
-
             let values: Vec<u16> = line
                 .split_whitespace()
                 .map(|s| s.parse().expect("Error on a line entry"))

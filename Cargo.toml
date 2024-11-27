@@ -1,8 +1,15 @@
 [package]
-name = "solomon-vrp-solver"
+name = "solomon_vrptw_cli"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "solomon_vrptw"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 itertools = "0.13.0"
 plotters = "0.3.7"
+rand = "0.8.5"
+rfd = "0.15.1"

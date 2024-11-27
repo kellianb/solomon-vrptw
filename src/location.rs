@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Location {
     pub id: u16,
     pub x: u16,
@@ -16,8 +16,22 @@ impl Location {
             .sqrt()
     }
 
-    // Calculate cost to deliver to other customer from this customer
+    // Calculate cost to arrive at this customer
     pub fn cost_to(&self, other: &Location, current_cost: f32) -> f32 {
+        // Add the distance to the other customer
+        current_cost + self.distance_to(other)
+    }
+
+    // Calculate cost to get to the delivery window of the other customer
+    pub fn cost_to_delivery_window(&self, other: &Location, current_cost: f32) -> f32 {
+        // Add the distance to the other customer
+        let current_cost = current_cost + self.distance_to(other);
+
+        current_cost + (other.ready_time as f32 - current_cost).max(0f32) // Add potentital waiting time
+    }
+
+    // Calculate cost to deliver to other customer from this customer
+    pub fn cost_to_deliver(&self, other: &Location, current_cost: f32) -> f32 {
         // Add the distance to the other customer
         let current_cost = current_cost + self.distance_to(other);
 
@@ -34,9 +48,7 @@ impl Location {
     ) -> Vec<&'a Location> {
         others
             .into_iter()
-            .filter(|&customer| {
-                customer.due_date as f32 >= (self.distance_to(customer) + current_cost)
-            })
+            .filter(|&customer| customer.due_date as f32 >= self.cost_to(customer, current_cost))
             .collect()
     }
 
@@ -63,12 +75,12 @@ impl Location {
         let deliverable = self.find_deliverable(others.clone(), current_cost, remaining_capacity);
 
         let cheapest = deliverable.into_iter().min_by(|&a, &b| {
-            self.cost_to(a, current_cost)
-                .partial_cmp(&self.cost_to(b, current_cost))
+            self.cost_to_deliver(a, current_cost)
+                .partial_cmp(&self.cost_to_deliver(b, current_cost))
                 .unwrap_or(std::cmp::Ordering::Equal)
         })?;
 
-        let cost = self.cost_to(cheapest, current_cost);
+        let cost = self.cost_to_deliver(cheapest, current_cost);
 
         let others: Vec<&Location> = others
             .into_iter()
