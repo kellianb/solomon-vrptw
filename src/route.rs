@@ -3,70 +3,66 @@ use plotters::prelude::*;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Route {
-    pub customers: Vec<Location>,
     pub warehouse: Location,
+    pub customers: Vec<Location>,
 }
 
 impl Route {
+    pub fn len(&self) -> usize {
+        self.customers.len() + 2
+    }
+    pub fn is_empty(&self) -> bool {
+        self.customers.is_empty()
+    }
     pub fn total_distance(&self) -> f32 {
-        (0..self.customers.len() - 1)
-            .map(|i| self.customers[i].distance_to(&self.customers[i + 1]))
+        (0..self.len() - 1)
+            .map(|i| self[i].distance_to(&self[i + 1]))
             .sum::<f32>()
-            // Distance from warehouse to first customer
-            + self.warehouse.distance_to(&self.customers[0])
-            // Distance from last customer to warehouse
-            + self.customers[self.customers.len() - 1].distance_to(&self.warehouse)
     }
 
     // -- Calculate total route cost --
     // Get the cost for this route (distance + waiting time + service time)
     pub fn total_cost(&self) -> f32 {
-        let mut cost = self.warehouse.cost_to_deliver(&self.customers[0], 0f32);
+        let mut cost = 0.0;
 
-        if self.customers.len() >= 2 {
-            for i in 0..self.customers.len() - 1 {
-                cost = self.customers[i].cost_to_deliver(&self.customers[i + 1], cost)
-            }
+        for i in 0..self.len() - 1 {
+            cost = self[i].cost_to_deliver(&self[i + 1], cost)
         }
-        self.customers[self.customers.len() - 1].cost_to_deliver(&self.warehouse, cost)
+
+        cost
     }
 
     // Get the cost for this route using a separate array of customers (distance + waiting time + service time)
     pub fn total_cost_with(&self, customers: &[&Location]) -> f32 {
         let mut cost = self.warehouse.cost_to_deliver(customers[0], 0f32);
 
-        if self.customers.len() >= 2 {
-            for i in 0..customers.len() - 1 {
-                cost = customers[i].cost_to_deliver(customers[i + 1], cost)
-            }
+        for i in 0..customers.len() - 1 {
+            cost = customers[i].cost_to_deliver(customers[i + 1], cost)
         }
+
         self.customers[customers.len() - 1].cost_to_deliver(&self.warehouse, cost)
     }
 
     // -- Calculate total route cost without service time --
     // Get the cost for this route (distance + waiting time)
     pub fn total_cost_no_service_time(&self) -> f32 {
-        let mut cost = self
-            .warehouse
-            .cost_to_delivery_window(&self.customers[0], 0f32);
+        let mut cost = 0.0;
 
-        if self.customers.len() >= 2 {
-            for i in 0..self.customers.len() - 1 {
-                cost = self.customers[i].cost_to_delivery_window(&self.customers[i + 1], cost)
-            }
+        for i in 0..self.len() - 1 {
+            cost = self[i].cost_to_delivery_window(&self[i + 1], cost)
         }
-        self.customers[self.customers.len() - 1].cost_to_delivery_window(&self.warehouse, cost)
+
+        cost
     }
 
     // Get the cost for this route using a separate array of customers (distance + waiting time)
     pub fn total_cost_no_service_time_with(&self, customers: &[&Location]) -> f32 {
         let mut cost = self.warehouse.cost_to_delivery_window(customers[0], 0f32);
 
-        if self.customers.len() >= 2 {
-            for i in 0..customers.len() - 1 {
-                cost = customers[i].cost_to_delivery_window(customers[i + 1], cost)
-            }
+        for i in 0..customers.len() - 1 {
+            cost = customers[i].cost_to_delivery_window(customers[i + 1], cost)
         }
+
         self.customers[customers.len() - 1].cost_to_delivery_window(&self.warehouse, cost)
     }
 
@@ -259,7 +255,11 @@ impl Route {
         output
     }
 
-    pub fn print_to_md_string(&self, vehicle_capacity: u16, svg_path: &str) -> String {
+    pub fn print_to_md_string(
+        &self,
+        vehicle_capacity: u16,
+        coord_bounds: (i32, i32, i32, i32),
+    ) -> String {
         let mut output = String::new();
 
         output.push_str("\n#### Details\n\n");
@@ -278,7 +278,7 @@ impl Route {
 
         output.push_str("\n#### Display\n\n");
 
-        output.push_str(&format!("![{} graph](./{})", svg_path, svg_path));
+        output.push_str(&self.plot(coord_bounds));
 
         output.push_str("\n#### Locations\n\n");
 
@@ -340,62 +340,124 @@ impl Route {
 
         output
     }
-    pub fn plot(&self, dirname: &str, title: &str) {
-        let title = &format! {"./{dirname}/{title}.svg"};
-        let root = SVGBackend::new(title, (640, 480)).into_drawing_area();
-        root.fill(&WHITE).unwrap();
+    pub fn plot(&self, coord_bounds: (i32, i32, i32, i32)) -> String {
+        let mut svg_data: String = String::new();
+        {
+            let root = SVGBackend::with_string(&mut svg_data, (800, 480)).into_drawing_area();
+            root.fill(&WHITE).unwrap();
 
-        let mut chart = ChartBuilder::on(&root)
-            .x_label_area_size(35)
-            .y_label_area_size(40)
-            .build_cartesian_2d(
-                0..(self.customers.iter().map(|c| c.x as i32).max().unwrap_or(0) + 10),
-                0..(self.customers.iter().map(|c| c.y as i32).max().unwrap_or(0) + 10),
-            )
-            .unwrap();
+            let mut chart = ChartBuilder::on(&root)
+                .x_label_area_size(35)
+                .y_label_area_size(40)
+                .build_cartesian_2d(
+                    coord_bounds.0..coord_bounds.1,
+                    coord_bounds.2..coord_bounds.3,
+                )
+                .unwrap();
 
-        chart
-            .configure_mesh()
-            .x_desc("X")
-            .y_desc("Y")
-            .draw()
-            .unwrap();
+            chart
+                .configure_mesh()
+                .x_desc("X")
+                .y_desc("Y")
+                .draw()
+                .unwrap();
 
-        // Plot the warehouse
-        chart
-            .draw_series(std::iter::once(Circle::new(
-                (self.warehouse.x as i32, self.warehouse.y as i32),
-                5,
-                RED.filled(),
-            )))
-            .unwrap();
+            // -- Plot the route --
+            let route_iter = std::iter::once((self.warehouse.x as i32, self.warehouse.y as i32))
+                .chain(
+                    self.customers
+                        .iter()
+                        .map(|c| (c.x as i32, c.y as i32))
+                        .chain(std::iter::once((
+                            self.warehouse.x as i32,
+                            self.warehouse.y as i32,
+                        ))),
+                );
 
-        // Plot the customers
-        for customer in &self.customers {
+            // Plot the route
+            chart
+                .draw_series(LineSeries::new(route_iter, &GREEN))
+                .unwrap();
+
+            // -- Plot the locations --
+            // Plot the warehouse
             chart
                 .draw_series(std::iter::once(Circle::new(
-                    (customer.x as i32, customer.y as i32),
+                    (self.warehouse.x as i32, self.warehouse.y as i32),
                     5,
-                    BLUE.filled(),
+                    RED.filled(),
                 )))
                 .unwrap();
+
+            // Plot the customers
+            for customer in &self.customers {
+                chart
+                    .draw_series(std::iter::once(Circle::new(
+                        (customer.x as i32, customer.y as i32),
+                        5,
+                        BLUE.filled(),
+                    )))
+                    .unwrap();
+
+                chart
+                    .draw_series(std::iter::once(Text::new(
+                        format!("{}", customer.id),
+                        (customer.x as i32 + 1, customer.y as i32 + 1),
+                        ("sans-serif", 15).into_font(),
+                    )))
+                    .unwrap();
+            }
+
+            root.present().unwrap();
         }
+        svg_data
+    }
 
-        let route_iter = std::iter::once((self.warehouse.x as i32, self.warehouse.y as i32)).chain(
-            self.customers
-                .iter()
-                .map(|c| (c.x as i32, c.y as i32))
-                .chain(std::iter::once((
-                    self.warehouse.x as i32,
-                    self.warehouse.y as i32,
-                ))),
-        );
+    pub fn iter(&self) -> RouteIterator {
+        RouteIterator {
+            route: self,
+            index: 0,
+        }
+    }
+}
 
-        // Plot the route
-        chart
-            .draw_series(LineSeries::new(route_iter, &GREEN))
-            .unwrap();
+impl std::ops::Index<usize> for Route {
+    type Output = Location;
 
-        root.present().unwrap();
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.warehouse,
+            x if x <= self.customers.len() => &self.customers[index - 1],
+            x if x == self.customers.len() + 1 => &self.warehouse,
+            _ => panic!("Index out of bounds"),
+        }
+    }
+}
+
+// -- Implement route iterator --
+pub struct RouteIterator<'a> {
+    route: &'a Route,
+    index: usize,
+}
+
+impl<'a> Iterator for RouteIterator<'a> {
+    type Item = &'a Location;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.index {
+            0 => {
+                self.index += 1;
+                Some(&self.route.warehouse)
+            }
+            x if x <= self.route.customers.len() => {
+                self.index += 1;
+                Some(&self.route.customers[x - 1])
+            }
+            x if x == self.route.customers.len() + 1 => {
+                self.index += 1;
+                Some(&self.route.warehouse)
+            }
+            _ => None,
+        }
     }
 }

@@ -52,13 +52,7 @@ fn main() {
     let (warehouse, customers) = parse_solomon_vrp_file(&path);
     println!("N° of customers : {}", &customers.len());
 
-    let mut vrp = Vrp {
-        customers,
-        warehouse,
-        n_vehicles: 25,
-        vehicle_capacity: 200,
-        routes: Vec::with_capacity(0),
-    };
+    let mut vrp = Vrp::new(warehouse, customers, 25, 200);
 
     // -- Run nearest neighbour heuristic --
     vrp.nearest_neighbour_heuristic();
@@ -71,15 +65,20 @@ fn main() {
         vrp.routes.len()
     );
 
+    _ = write_to_file(
+        &format! {"{target_dir}/nearest_neighbour_heuristic.md"},
+        &vrp.print_to_md_string(),
+    );
+
     // -- Run Ant Colony Optimization heuristic
     let aco_params = AcoParams::default();
-    vrp.aco_heuristic(&aco_params).plot(target_dir);
+    vrp.aco_heuristic(&aco_params);
 
     println!("Total cost (aco_heuristic): {}", vrp.total_cost());
     println!("N° of routes (aco_heuristic): {}", vrp.routes.len());
 
     _ = write_to_file(
-        &format! {"{target_dir}/routes.md"},
+        &format! {"{target_dir}/aco_heuristic.md"},
         &vrp.print_to_md_string(),
     );
 }
