@@ -13,6 +13,8 @@ pub mod location;
 /// Represents vehicle routes in the VRP, contains [Location](location::Location) objects
 pub mod route;
 
-/// Represents a full VRPTW, contains [Location](location::Location) and [Route](route::Route)
-/// objects
+/// Represents a full VRPTW, contains [Location](location::Location) objects
 pub mod vrp;
+
+/// Represents a solution to a VRPTW, contains [Route](route::Route) objects
+pub mod vrp_result;

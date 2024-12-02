@@ -1,5 +1,5 @@
 use crate::location::Location;
-use crate::route::Route;
+use crate::vrp_result::VrpResult;
 
 use plotters::prelude::*;
 
@@ -9,8 +9,6 @@ pub struct Vrp {
     pub warehouse: Location,
     pub n_vehicles: u16,
     pub vehicle_capacity: u16,
-    pub routes: Vec<Route>,
-    pub(crate) heuristic_cost_history: Option<Vec<f32>>,
 }
 
 impl Vrp {
@@ -25,51 +23,19 @@ impl Vrp {
             customers,
             n_vehicles,
             vehicle_capacity,
+        }
+    }
+
+    pub fn to_result(&self) -> VrpResult {
+        VrpResult {
+            n_vehicles: self.n_vehicles,
+            vehicle_capacity: self.vehicle_capacity,
+            coord_bounds: self.get_coord_bounds(),
             ..Default::default()
         }
     }
 
-    pub fn total_cost(&self) -> f32 {
-        self.routes.iter().map(|x| x.total_cost()).sum()
-    }
-
-    pub fn total_cost_with(&self, routes: &[Route]) -> f32 {
-        routes.iter().map(|x| x.total_cost()).sum()
-    }
-
-    pub fn total_cost_no_service_time(&self) -> f32 {
-        self.routes
-            .iter()
-            .map(|x| x.total_cost_no_service_time())
-            .sum()
-    }
-
-    pub fn total_cost_no_service_time_with(&self, routes: &[Route]) -> f32 {
-        routes.iter().map(|x| x.total_cost_no_service_time()).sum()
-    }
-
-    /// Print this VRP problem
-    pub fn print(&self) -> &Vrp {
-        println!("{}", self.print_to_string());
-        self
-    }
-    /// Print this VRP problem to a string
-    pub fn print_to_string(&self) -> String {
-        let mut output = String::new();
-        output.push_str("Vrp problem\n");
-        output.push_str(&format! {"Total cost: {}\n", self.total_cost()});
-        output.push_str(&format! {"n_vehicles: {}\n", self.n_vehicles});
-        output.push('\n');
-        for (i, route) in self.routes.iter().enumerate() {
-            output.push('\n');
-            output.push_str(&format! {"Is valid: {}\n", route.is_valid(self.vehicle_capacity)});
-            output.push_str(&route.print_to_string(Some(&format! {"Route {}", i + 1})));
-            output.push('\n');
-        }
-        output
-    }
-
-    fn get_coord_bounds(&self) -> (i32, i32, i32, i32) {
+    pub fn get_coord_bounds(&self) -> (i32, i32, i32, i32) {
         let x_coords = std::iter::once(self.warehouse.x as i32).chain(
             self.customers
                 .iter()
@@ -96,27 +62,14 @@ impl Vrp {
         let mut output = String::new();
         output.push_str("# Vrp problem\n");
         output.push_str("## Details\n\n");
-        output.push_str(&format! {"- Total cost: {}\n", self.total_cost()});
         output.push_str(&format! {"- N° of customers: {}\n", self.customers.len()});
         output.push_str(&format! {"- N° of vehicles: {}\n", self.n_vehicles});
         output.push_str(&format! {"- Vehicle capacity: {}\n", self.vehicle_capacity});
-
-        if let Some(val) = self.plot_heuristic_cost_history() {
-            output.push_str("\n## Heuristic Cost History\n\n");
-            output.push_str(&val);
-        }
 
         output.push_str("\n## Display\n\n");
 
         output.push_str(&self.plot());
 
-        output.push_str("\n## Routes\n");
-        for (i, route) in self.routes.iter().enumerate() {
-            output.push_str(&format! {"\n### Route {}\n", i + 1});
-            output.push_str(
-                &route.print_to_md_string(self.vehicle_capacity, self.get_coord_bounds()),
-            );
-        }
         output
     }
 
@@ -178,41 +131,4 @@ impl Vrp {
         }
         svg_data
     }
-    pub fn plot_heuristic_cost_history(&self) -> Option<String> {
-        let mut svg_data: String = String::new();
-        if let Some(history) = &self.heuristic_cost_history {
-            let root = SVGBackend::with_string(&mut svg_data, (800, 480)).into_drawing_area();
-            root.fill(&WHITE).unwrap();
-
-            let max_cost = history.iter().cloned().fold(f32::NAN, f32::max);
-            let min_cost = history.iter().cloned().fold(f32::NAN, f32::min);
-
-            let mut chart = ChartBuilder::on(&root)
-                .margin(5)
-                .x_label_area_size(35)
-                .y_label_area_size(40)
-                .build_cartesian_2d(0..history.len(), min_cost..max_cost)
-                .unwrap();
-
-            chart.configure_mesh().x_desc("Iteration").y_desc("Cost").draw().unwrap();
-
-            chart
-                .draw_series(LineSeries::new(
-                    history.iter().enumerate().map(|(i, &cost)| (i, cost)),
-                    &RED,
-                ))
-                .unwrap()
-                .label("Cost")
-                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
-
-            chart.configure_series_labels().background_style(&WHITE.mix(0.8)).draw().unwrap();
-
-            root.present().unwrap();
-        } else {
-            return None;
-        }
-        Some(svg_data)
-    }
 }
-
-

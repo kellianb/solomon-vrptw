@@ -1,6 +1,4 @@
 //! This crate uses the solomon_vrp_solver library to solve a VRP
-
-use solomon_vrptw::file_parser::parse_solomon_vrp_file;
 use solomon_vrptw::heuristics::aco::AcoParams;
 use solomon_vrptw::vrp::Vrp;
 use std::fs;
@@ -44,20 +42,19 @@ fn main() {
     _ = delete_all_files_in_directory(target_dir);
 
     // -- Create an instance of VRP from the .txt problem definition --
-    let (warehouse, customers) = parse_solomon_vrp_file(&path);
-    println!("N° of customers : {}", &customers.len());
+    let vrp = Vrp::from_file(&path).expect("Failed to parse file");
 
-    let mut vrp = Vrp::new(warehouse, customers, 25, 200);
+    dbg!(&vrp);
 
     // -- Run nearest neighbour heuristic --
-    vrp.nearest_neighbour_heuristic();
+    let nn_result = vrp.nearest_neighbour_heuristic();
     println!(
         "Total cost (nearest_neighbour_heuristic): {}",
-        vrp.total_cost()
+        nn_result.total_cost()
     );
     println!(
         "N° of routes (nearest_neighbour_heuristic): {}",
-        vrp.routes.len()
+        nn_result.routes.len()
     );
 
     fs::write(
@@ -67,11 +64,15 @@ fn main() {
     .expect("Failed to write nearest_neighbour_heuristic results");
 
     // -- Run Ant Colony Optimization heuristic
-    let aco_params = AcoParams::default();
-    vrp.aco_heuristic(&aco_params);
+    let aco_params = AcoParams {
+        pheromone_amt: 1.0 / nn_result.total_cost(),
+        ..AcoParams::default()
+    };
 
-    println!("Total cost (aco_heuristic): {}", vrp.total_cost());
-    println!("N° of routes (aco_heuristic): {}", vrp.routes.len());
+    let aco_result = vrp.aco_heuristic(&aco_params);
+
+    println!("Total cost (aco_heuristic): {}", aco_result.total_cost());
+    println!("N° of routes (aco_heuristic): {}", aco_result.routes.len());
 
     fs::write(
         format! {"{target_dir}/aco_heuristic.md"},

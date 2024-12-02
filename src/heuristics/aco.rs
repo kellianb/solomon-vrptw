@@ -1,12 +1,13 @@
-use std::collections::HashMap;
-
 use crate::location::Location;
 use crate::route::Route;
 use crate::vrp::Vrp;
+use crate::vrp_result::VrpResult;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::thread_rng;
+use std::collections::HashMap;
 
 /// Parameters for the aco heuristic
+#[derive(Debug)]
 pub struct AcoParams {
     /// The number of ants in this aco
     pub n_ants: u16,
@@ -20,6 +21,9 @@ pub struct AcoParams {
     pub beta: u16,
     /// The evaporation factor for pheromone
     pub rho: f32,
+    /// The initial pheromone value, a good value for this is 1 / total cost of nearest neighbor
+    /// for this dataset
+    pub pheromone_amt: f32,
 }
 
 impl Default for AcoParams {
@@ -30,22 +34,21 @@ impl Default for AcoParams {
             alpha: 1,
             beta: 1,
             rho: 0.1,
+            pheromone_amt: 1.0 / 8000.0,
         }
     }
 }
 
 impl Vrp {
     /// Run the aco heuritic on a Vrp instance
-    pub fn aco_heuristic(&mut self, params: &AcoParams) -> &mut Vrp {
+    pub fn aco_heuristic(&self, params: &AcoParams) -> VrpResult {
         let mut pheromones: HashMap<(Location, Location), f32> = HashMap::new();
 
-        let pheromone_amt: f32 = 1f32 / self.total_cost();
-
         // Initialise pheromones
-        self.set_pheromones(pheromone_amt, &mut pheromones);
+        self.set_pheromones(params, &mut pheromones);
 
         // Store best results
-        let mut best_solution: Vec<Route> = Vec::with_capacity(1);
+        let mut best_solution = VrpResult::from_vrp(self, Vec::default(), None);
         let mut best_cost = f32::INFINITY;
         let mut best_cost_history: Vec<f32> = Vec::default();
 
@@ -57,7 +60,8 @@ impl Vrp {
             self.update_pheromones(&solutions, params, &mut pheromones);
 
             for solution in solutions {
-                let cost: f32 = self.total_cost_with(&solution);
+                let solution = VrpResult::from_vrp(self, solution, None);
+                let cost: f32 = solution.total_cost();
 
                 if cost < best_cost {
                     best_solution = solution;
@@ -67,16 +71,16 @@ impl Vrp {
             best_cost_history.push(best_cost);
         }
 
-        self.routes = best_solution;
-        self.heuristic_cost_history = Some(best_cost_history);
-
-        self
+        VrpResult {
+            heuristic_cost_history: Some(best_cost_history),
+            ..best_solution
+        }
     }
 
     /// Reset or set the pheromones
     fn set_pheromones(
         &self,
-        pheromone_amt: f32,
+        params: &AcoParams,
         pheromones: &mut HashMap<(Location, Location), f32>,
     ) {
         let locations: Vec<&Location> = self
@@ -88,7 +92,7 @@ impl Vrp {
         for &a in &locations {
             for &b in &locations {
                 if *a != *b {
-                    pheromones.insert((a.clone(), b.clone()), pheromone_amt);
+                    pheromones.insert((a.clone(), b.clone()), params.pheromone_amt);
                 }
             }
         }
@@ -107,9 +111,10 @@ impl Vrp {
 
         // Remove pheromones on each edge where ants passed
         for solution in solutions {
-            let deposit = params.rho / self.total_cost_with(solution);
+            let solution = VrpResult::from_vrp(self, solution.clone(), None);
+            let deposit = params.rho / solution.total_cost();
 
-            for route in solution {
+            for route in solution.routes {
                 for i in 0..route.len() - 1 {
                     let pheromone = pheromones
                         .get_mut(&(route[i].clone(), route[i + 1].clone()))
@@ -210,7 +215,7 @@ fn select_next_location<'a>(
             let desirability = 1f32 / cost;
 
             f32::powi(pheromone, params.alpha as i32) * f32::powi(desirability, params.beta as i32)
-                + 1e-8
+                + 1e-6
         })
         .collect();
 

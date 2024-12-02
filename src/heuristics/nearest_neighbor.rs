@@ -1,10 +1,13 @@
 use crate::location::Location;
 use crate::route::Route;
 use crate::vrp::Vrp;
+use crate::vrp_result::VrpResult;
 
 impl Vrp {
-    pub fn nearest_neighbour_heuristic(&mut self) -> &mut Vrp {
+    pub fn nearest_neighbour_heuristic(&self) -> VrpResult {
         let mut customers: Vec<&Location> = self.customers.iter().collect();
+
+        let mut routes: Vec<Route> = Vec::new();
 
         while !customers.is_empty() {
             let mut route = Route {
@@ -37,8 +40,8 @@ impl Vrp {
 
             let route = route;
 
-            self.routes.push(route);
+            routes.push(route);
         }
-        self
+        VrpResult::from_vrp(self, routes, None)
     }
 }
