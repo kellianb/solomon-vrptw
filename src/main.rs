@@ -20,11 +20,6 @@ fn delete_all_files_in_directory(directory: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn write_to_file(filepath: &str, contents: &str) -> io::Result<()> {
-    // Write the string to the file
-    fs::write(filepath, contents)
-}
-
 /// Let the user pick a solomon VRPTW .txt problem definition
 fn pick_file() -> Option<String> {
     let path = rfd::FileDialog::new()
@@ -65,10 +60,11 @@ fn main() {
         vrp.routes.len()
     );
 
-    _ = write_to_file(
-        &format! {"{target_dir}/nearest_neighbour_heuristic.md"},
-        &vrp.print_to_md_string(),
-    );
+    fs::write(
+        format! {"{target_dir}/nearest_neighbour_heuristic.md"},
+        nn_result.as_md_string(),
+    )
+    .expect("Failed to write nearest_neighbour_heuristic results");
 
     // -- Run Ant Colony Optimization heuristic
     let aco_params = AcoParams::default();
@@ -77,8 +73,9 @@ fn main() {
     println!("Total cost (aco_heuristic): {}", vrp.total_cost());
     println!("N° of routes (aco_heuristic): {}", vrp.routes.len());
 
-    _ = write_to_file(
-        &format! {"{target_dir}/aco_heuristic.md"},
-        &vrp.print_to_md_string(),
-    );
+    fs::write(
+        format! {"{target_dir}/aco_heuristic.md"},
+        aco_result.as_md_string(),
+    )
+    .expect("Failed to write aco_heuristic results");
 }
